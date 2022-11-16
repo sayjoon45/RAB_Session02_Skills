@@ -7,6 +7,8 @@ using Autodesk.Revit.UI.Selection;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Security.Authentication.ExtendedProtection.Configuration;
+using Forms = System.Windows.Forms;
 
 #endregion
 
@@ -25,82 +27,76 @@ namespace RAB_Session02_Skills
             Application app = uiapp.Application;
             Document doc = uidoc.Document;
 
-            string[] myStringArray = new string[4];
-            List<string> myStringList = new List<string>();
+            // setup open file dialog
+            Forms.OpenFileDialog selectFile = new Forms.OpenFileDialog();
+            selectFile.InitialDirectory = "D:\\";
+            selectFile.Filter = "CSV file|*.csv|All files|*.*";
+            //selectFile.Filter = "Revit file|*.rvt;*.rfa";
+            //selectFile.Filter = "All files|*.*";
+            selectFile.Multiselect = false;
 
-            myStringArray[0] = "This is the first item";
-            myStringArray[1] = "12312";
-            myStringArray[2] = "This is the third item";
-            myStringArray[3] = "This is the last item";
-
-            myStringList.Add("This is the first item");
-            myStringList.Add("This is the second item");
-
-            myStringList.RemoveAt(0);
-
-            List<string[]> myArrayList = new List<string[]>();
-            myArrayList.Add(myStringArray);
-
-            foreach(string myString in myStringArray)
+            // open file dialog
+            string fileName = "";
+            if (selectFile.ShowDialog() == Forms.DialogResult.OK)
             {
-                //TaskDialog.Show("Test", myString);
+                fileName = selectFile.FileName;
             }
 
-            foreach(string myString2 in myStringList)
+            if (fileName != "")
             {
-                //TaskDialog.Show("Test", myString2);
+                // do something with the file
+
             }
 
-            foreach (string[] myArray in myArrayList)
+            myStruct struct1 = new myStruct();
+            struct1.Name = "test name";
+            struct1.Description = "this is a description";
+            struct1.Distance = 100;
+
+            myStruct struct2 = new myStruct("test name2", "description 2", 200);
+
+            List<myStruct> myList = new List<myStruct>();
+            myList.Add(struct1);
+            myList.Add(struct2);
+
+            foreach (myStruct currentStruct in myList)
             {
-                string comboString = "";
-
-                foreach(string myString3 in myArray)
-                {
-                    comboString = comboString + myString3;
-                }
-
-                Debug.Print("***********" + comboString);
+                Debug.Print(currentStruct.Name);
             }
 
-            // read text file data
-            string filepath = @"D:\LearningPath\ArchSmarter_RevitAddins\RAB_Session02_Skills\Room_List.csv";
-            string fileText = System.IO.File.ReadAllText(filepath);
-            
-            TaskDialog.Show("Test", fileText);
+            FilteredElementCollector vftCollector = new FilteredElementCollector(doc);
+            vftCollector.OfClass(typeof(ViewFamilyType));
 
-            string[] fileArray = System.IO.File.ReadAllLines(filepath);
+            Element tblock = GetTitleBlockByName(doc, "E1 30x42 Horizontal");
+            ElementId tBlockId = tblock.Id;
 
-            foreach(string rowString in fileArray)
+            ViewFamilyType planVFT = null;
+            ViewFamilyType rcpVFT = null;
+            foreach(ViewFamilyType vft in vftCollector)
             {
-                string[] cellString = rowString.Split(',');
+                if (vft.ViewFamily == ViewFamily.FloorPlan)
+                    planVFT = vft;
 
-                string roomNumber = cellString[0];
-                string roomName = cellString[1];
-                string roomArea = cellString[2];
-
-                //double roomAreaDouble = double.Parse(roomArea);
-
-                double roomAreaDouble2 = 0;
-                bool didItParse = double.TryParse(roomArea, out roomAreaDouble2);
+                if (vft.ViewFamily == ViewFamily.CeilingPlan)
+                    rcpVFT = vft;
             }
-
-            FilteredElementCollector collector = new FilteredElementCollector(doc);
-            collector.OfCategory(BuiltInCategory.OST_TitleBlocks);
-            ElementId tblockId = collector.FirstElementId();
 
             Transaction t = new Transaction(doc);
-            t.Start("Create Level and Sheet");
+            t.Start("Create Some Stuff");
+            
+            Level newLevel = Level.Create(doc, 20);
 
-            // Create Level
-            double levelHeight = ConvertMetersToFeet(10);
-            Level myLevel = Level.Create(doc, levelHeight);
-            myLevel.Name = "My Level";
+            ViewPlan newPlanView = ViewPlan.Create(doc, planVFT.Id, newLevel.Id);
+            ViewPlan newRCPView = ViewPlan.Create(doc, rcpVFT.Id, newLevel.Id);
 
-            // Create Sheet
-            ViewSheet mySheet = ViewSheet.Create(doc, tblockId);
-            mySheet.Name = "My New Sheet";
-            mySheet.SheetNumber = "A101";
+            ViewSheet newSheet = ViewSheet.Create(doc, tBlockId);
+            ViewSheet newSheetView = ViewSheet.Create(doc, tBlockId);
+
+            XYZ insertPoint = new XYZ(2, 1, 0);
+            XYZ secondInsertPoint = new XYZ(0, 1, 0);
+
+            Viewport newViewPort = Viewport.Create(doc, newSheet.Id, newPlanView.Id, insertPoint);
+            Viewport newCeilingViewPort = Viewport.Create(doc, newSheet.Id, newRCPView.Id, secondInsertPoint);
 
             t.Commit();
             t.Dispose();
@@ -113,6 +109,36 @@ namespace RAB_Session02_Skills
             double feet = meters * 3.28084;
 
             return feet;
+        }
+
+        internal Element GetTitleBlockByName(Document doc, string name)
+        {
+            FilteredElementCollector tblockCollector = new FilteredElementCollector(doc);
+            tblockCollector.OfCategory(BuiltInCategory.OST_TitleBlocks);
+
+            foreach(Element currentTblock in tblockCollector)
+            {
+                if (currentTblock.Name == name)
+                    return currentTblock;
+            }
+
+            return null;
+        }
+
+        struct myStruct
+        {
+            public string Name;
+            public string Description;
+            public double Distance;
+            private int Number;
+
+            public myStruct(string name, string description, double dist)
+            {
+                Name = name;
+                Description = description;
+                Distance = dist;
+                Number = 0;
+            }
         }
     }
 }
